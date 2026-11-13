@@ -184,6 +184,21 @@
 - [x] T092 [사람] 예시 데이터(`data\sample`)로 `run_merge.bat`을 실행해 창의 세 단계, 저장, 통합 실행까지 화면을 확인한다
 - [x] T093 [US4] 통과 확인, 감사관 판정, 커밋. README에 설정 창 사용법 추가
 
+## Phase 15: 스토리 4·5 보강 (P2) HTML 설정 화면과 실행 파일 4개
+
+사람이 정한 것: 실행 파일은 검사·설정·서버 실행·서버 종료 4개, 설정은 브라우저 화면, 칸마다 예시 값을 보인다(이 PC 화면에만). tkinter 창(Phase 14)의 판단 로직 `setup_config`은 그대로 쓰고 화면만 HTML로 바꾼다(FR-028~FR-030).
+
+- [ ] T094 [P] [US4] `tests/test_skip_sheets.py`: 설정 사본에 `skip_sheets.csv`를 두고 이름이 같은 시트(앞뒤 공백·대소문자 차이 포함)가 통합과 헤더 조사에서 빠지고, 감사 결과·보고서에 `제외한 시트 수`가 나오며, 그 시트만 대응 규칙이 없던 입력의 종료 코드가 0이 된다. 다른 시트의 행 수는 그대로다(FR-028)
+- [ ] T095 [P] [US4] `tests/test_web_server.py`: `python -m trouble_merge.server --port 0`을 임시 입력·설정·출력 폴더로 띄워 ① `/api/scan` JSON에 양식·실제 헤더·예시 값(앞 3개)·새 양식이 있다 ② `/setup`과 `/` 화면에 외부 주소가 없다 ③ 머리글 `X-Trouble-Merge`이 없거나 Host가 다르면 거부(403) ④ `/api/save`가 대응·제외 시트를 저장하고(오류면 저장 안 함) `/api/merge` 뒤 `/`가 게시판을 보인다 ⑤ 서버의 stdout·stderr와 저장한 CSV에 표식 값 `LEAK-`가 없다(FR-029)
+- [ ] T096 [US4] 위 테스트가 기대값 불일치로 실패하는 것을 확인하고 실패 상태로 커밋(`test:`로 시작)
+- [ ] T097 [US4] `src/trouble_merge/mapping.py`, `cli.py`, `audit.py`, `survey.py`: 제외 시트
+- [ ] T098 [US4] `src/trouble_merge/setup_config.py`: 예시 값 읽기(화면용, 출력 없음)와 제외 시트 저장
+- [ ] T099 [US4] `src/trouble_merge/server.py`, `setup_page.html`: 로컬 서버와 설정 화면(외부 주소 없음, 화면에는 textContent로만 그림)
+- [ ] T100 [US4] `1_검사.bat`, `2_설정.bat`, `3_서버실행.bat`, `4_서버종료.bat`: 맨 위 네 줄(INPUT, CONFIG, OUT, PORT), 기본은 예시 데이터 경로
+- [ ] T101 [사람] 예시 데이터로 1 → 2 → 3 → 4 순서로 실행해 화면을 확인한다
+- [ ] T102 [사람] 옛 실행 파일(`run_merge.bat`, `run_survey.bat`, `demo_start.bat`, `demo_stop.bat`)을 지운다(Claude가 명령을 준다)
+- [ ] T103 [US4] 통과 확인, 감사관 판정, 커밋. README의 실행 방법을 4단계로 다시 쓴다
+
 ## 의존 관계
 
 ```
