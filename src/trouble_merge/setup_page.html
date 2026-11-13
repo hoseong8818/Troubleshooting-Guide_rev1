@@ -239,7 +239,7 @@
       var lack = REQUIRED.filter(function (r) { return used.indexOf(r) < 0; });
       if (lack.length) { missing.push(f.name + ": " + lack.join(", ") + " 없음"); }
     });
-    return !missing.length || window.confirm("아래 모양은 꼭 있어야 할 칸이 빠져 있어서, 그 행들이 '확인 필요'로 표시됩니다.\n\n" + missing.join("\n") + "\n\n그래도 저장할까요?");
+    return !missing.length || window.confirm("아래 모양은 꼭 있어야 할 칸이 빠져 있어서 그 행들이 '확인 필요'로 표시됩니다.\n\n" + missing.join("\n") + "\n\n그래도 저장할까요?");
   }
   function errorsText(errors) {
     return errors.map(function (e) {
