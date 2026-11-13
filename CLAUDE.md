@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 현재 상태
 
-구현은 Phase 10까지 끝났고 테스트 119개가 통과한다(`src/trouble_merge/`, `tests/`). 데모는 `tools\run_demo.ps1 -Serve`(가짜·예시 데이터 통합 + 게시판 http://localhost:3456), 실제 업무 실행은 `run_merge.bat`(맨 위 세 줄만 고치고 사람이 더블클릭). 남은 사람 작업은 T003a, T003b, T047, T050, T063. 보호 훅(`protect_files.py`)은 구현·등록했고 보호할 파일은 모두 커밋되어 실제로 보호된다. 입력 크기와 행 수 상한(NFR-007)은 명령줄 옵션으로 구현했고(기본값은 데모용), 운영체제 권한과 회사 PC 확인은 데모 범위에서 하지 않았으며 실제 업무 이관 시 T050에서 한다(README 참고). 작업은 `specs/001-trouble-merge/tasks.md`의 Phase 순서를 따른다. 문서와 출력 문구는 모두 한국어다.
+구현은 Phase 15까지 끝났고 테스트 157개가 통과한다(`src/trouble_merge/`, `tests/`). 데모는 `tools\run_demo.ps1 -Serve`(가짜·예시 데이터 통합 + 게시판 http://localhost:3456), 실제 업무 실행은 `1_검사.bat` ~ `4_서버종료.bat`(맨 위 네 줄만 고치고 사람이 더블클릭. 설정은 `2_설정.bat`이 여는 브라우저 화면, 서버는 127.0.0.1에서만). 남은 사람 작업은 T003a, T003b, T047, T050, T063. 보호 훅(`protect_files.py`)은 구현·등록했고 보호할 파일은 모두 커밋되어 실제로 보호된다. 입력 크기와 행 수 상한(NFR-007)은 명령줄 옵션으로 구현했고(기본값은 데모용), 운영체제 권한과 회사 PC 확인은 데모 범위에서 하지 않았으며 실제 업무 이관 시 T050에서 한다(README 참고). 작업은 `specs/001-trouble-merge/tasks.md`의 Phase 순서를 따른다. 문서와 출력 문구는 모두 한국어다.
 
 ## 이 도구가 하는 일
 
