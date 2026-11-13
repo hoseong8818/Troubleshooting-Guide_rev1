@@ -6,9 +6,9 @@ rem  헤더 조사 보고서 (T077, FR-025)
 rem  아래 세 줄만 고친 뒤 더블클릭한다. 엑셀의 헤더 행만 읽고 셀 값은 읽지 않는다.
 rem  실제 데이터 폴더는 저장소 밖에 두고, 실행은 사람이 직접 한다(헌법 원칙 1).
 rem ================================================================
-set "INPUT=D:\real_data"
-set "CONFIG=D:\real_config"
-set "OUT=D:\real_out"
+set "INPUT=C:\mywork\data\sample"
+set "CONFIG=C:\mywork\out\sample_cfg"
+set "OUT=C:\mywork\out"
 rem ================================================================
 
 cd /d "%~dp0"
