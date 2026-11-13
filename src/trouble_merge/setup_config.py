@@ -10,11 +10,16 @@
 """
 
 import csv
+from datetime import datetime, time
 from pathlib import Path
 
 from .cli import DEFAULT_MAX_FILE_MB, DEFAULT_MAX_UNZIPPED_MB
+from openpyxl import load_workbook
+
+from .check import text
 from .mapping import (
-    EXTRA_ROLE, OUTPUT_COLUMNS_FILE, STANDARD_COLUMNS, load_config_formats, norm_key,
+    EXTRA_ROLE, OUTPUT_COLUMNS_FILE, SKIP_SHEETS_FILE, STANDARD_COLUMNS, load_config_formats,
+    load_skip_sheets, norm_key, skip_keys,
 )
 from .merge import REQUIRED_STANDARD
 from .reader import list_inputs
@@ -41,6 +46,8 @@ class FormInfo:
         self.headers = []           # 실제 헤더 이름(처음 나온 순서, 중복 없음)
         self.files = set()
         self.sheet_count = 0
+        self.sheets = []            # 시트 이름(중복 없음, 처음 나온 순서)
+        self.samples = {}           # 헤더 이름 -> 예시 값 목록(화면용, samples>0일 때만)
         self.mapping = {}           # 헤더 이름 -> 키 또는 None
 
     @property
@@ -54,32 +61,62 @@ class FormInfo:
 
 
 class Scan:
-    def __init__(self, forms, output_columns, previous, skipped):
+    def __init__(self, forms, output_columns, previous, skipped, skip_sheets):
         self.forms = forms
         self.output_columns = output_columns    # [(표시 이름, 역할)]
         self.previous = previous                # 정리한 원본 컬럼명 -> 키(이전에 저장한 대응)
         self.skipped = skipped                  # (파일명, 사유)
+        self.skip_sheets = skip_sheets          # skip_sheets.csv의 시트 이름 목록(없으면 [])
 
 
 def default_output_columns():
     return [(role, role) for role in STANDARD_COLUMNS]
 
 
-def scan(inputs, config_dir, max_file_mb=DEFAULT_MAX_FILE_MB, max_unzipped_mb=DEFAULT_MAX_UNZIPPED_MB):
-    """양식 목록. 설정 폴더에 column_map.csv가 없으면 빈 설정으로 본다. 설정 오류는 ConfigError."""
+SAMPLE_ROWS = 50   # 예시 값을 찾을 때 읽는 데이터 행 수의 상한
+SAMPLE_CHARS = 30  # 예시 값 하나의 글자 수 상한
+
+
+def read_samples(path, sheet_name, header_row, cells, count):
+    """한 시트의 데이터 행에서 칸마다 빈 칸이 아닌 값 앞 count개(화면 표시용). 아무것도 출력하지 않는다."""
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb[sheet_name]
+        samples = {name: [] for _, name in cells}
+        for row in ws.iter_rows(min_row=header_row + 1, max_row=header_row + SAMPLE_ROWS, values_only=True):
+            for pos, name in cells:
+                raw = row[pos] if pos < len(row) else None
+                if isinstance(raw, datetime) and raw.time() == time(0, 0):
+                    raw = raw.date()  # 시각이 없는 날짜는 날짜만 보인다
+                value = text(raw)
+                if value is not None and len(samples[name]) < count:
+                    samples[name].append(value[:SAMPLE_CHARS])
+    finally:
+        wb.close()
+    return samples
+
+
+def scan(inputs, config_dir, max_file_mb=DEFAULT_MAX_FILE_MB, max_unzipped_mb=DEFAULT_MAX_UNZIPPED_MB,
+         samples=0):
+    """양식 목록. 설정 폴더에 column_map.csv가 없으면 빈 설정으로 본다. 설정 오류는 ConfigError.
+
+    samples가 0보다 크면 양식마다 첫 시트에서 칸별 예시 값을 그만큼 읽는다(FR-029, 화면에만 쓴다).
+    """
     config_dir = Path(config_dir)
     if (config_dir / COLUMN_MAP_FILE).exists():
         formats, output_columns = load_config_formats(config_dir)
     else:
         formats, output_columns = {}, None
     output_columns = output_columns or default_output_columns()
+    skip_names = load_skip_sheets(config_dir)
 
     previous = {}
     for fmt in formats.values():
         for source, standard in fmt.columns:
             previous.setdefault(norm_key(source), standard)
 
-    found = collect(list_inputs(inputs), formats, max_file_mb, max_unzipped_mb)
+    found = collect(list_inputs(inputs), formats, max_file_mb, max_unzipped_mb,
+                    skip=skip_keys(skip_names), keep_grid=samples > 0)
     forms = []
     by_format = {}
     used = set(formats)
@@ -102,6 +139,16 @@ def scan(inputs, config_dir, max_file_mb=DEFAULT_MAX_FILE_MB, max_unzipped_mb=DE
         form.add_headers(names)
         form.files.update(f for f, _ in group.sheets)
         form.sheet_count += len(group.sheets)
+        for _, sheet_name in group.sheets:
+            if sheet_name not in form.sheets:
+                form.sheets.append(sheet_name)
+        if samples > 0 and group.first_path is not None:
+            try:
+                got = read_samples(group.first_path, group.sheets[0][1], group.header_row, group.cells, samples)
+            except Exception:  # 예시 값은 보조 정보다. 못 읽으면 비워 둔다(메시지는 버린다)
+                got = {}
+            for name, values in got.items():
+                form.samples.setdefault(name, values)
 
     for fmt in formats.values():  # 입력에 없는 기존 양식도 지우지 않도록 목록에 남긴다
         if fmt.name not in by_format:
@@ -116,7 +163,7 @@ def scan(inputs, config_dir, max_file_mb=DEFAULT_MAX_FILE_MB, max_unzipped_mb=DE
         else:
             fmt = formats[form.name]
             form.mapping = {h: fmt.standard_of(h) for h in form.headers}
-    return Scan(forms, output_columns, previous, found.skipped)
+    return Scan(forms, output_columns, previous, found.skipped, skip_names or [])
 
 
 def keys_of(output_columns):
@@ -172,8 +219,11 @@ def check_output_columns(output_columns):
         raise SaveError("판정 컬럼 6개가 한 번씩 있어야 한다")
 
 
-def save(config_dir, forms, output_columns, stamp):
-    """forms: [(양식 이름, 헤더행, 시트 또는 None, {헤더: 키 또는 None})]. 검사를 통과해야 쓴다."""
+def save(config_dir, forms, output_columns, stamp, skip_sheets=None):
+    """forms: [(양식 이름, 헤더행, 시트 또는 None, {헤더: 키 또는 None})]. 검사를 통과해야 쓴다.
+
+    skip_sheets가 None이 아니면 skip_sheets.csv(FR-028)도 그 목록으로 쓴다(기존 파일은 보관).
+    """
     check_output_columns(output_columns)
     errors, _ = validate([(name, mapping) for name, _, _, mapping in forms])
     if errors:
@@ -185,7 +235,8 @@ def save(config_dir, forms, output_columns, stamp):
 
     config_dir = Path(config_dir)
     config_dir.mkdir(parents=True, exist_ok=True)
-    for file_name in (COLUMN_MAP_FILE, OUTPUT_COLUMNS_FILE):
+    files = [COLUMN_MAP_FILE, OUTPUT_COLUMNS_FILE] + ([SKIP_SHEETS_FILE] if skip_sheets is not None else [])
+    for file_name in files:
         path = config_dir / file_name
         if path.exists():
             stem = Path(file_name).stem
@@ -203,3 +254,13 @@ def save(config_dir, forms, output_columns, stamp):
         writer.writerow(OUTPUT_COLUMNS_HEADER)
         for order, (name, role) in enumerate(output_columns, start=1):
             writer.writerow([order, name, role])
+    if skip_sheets is not None:
+        with open(config_dir / SKIP_SHEETS_FILE, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["시트"])
+            seen = set()
+            for name in skip_sheets:
+                name = str(name).strip()
+                if name and norm_key(name) not in seen:
+                    seen.add(norm_key(name))
+                    writer.writerow([name])

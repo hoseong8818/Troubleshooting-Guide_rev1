@@ -13,7 +13,8 @@ from .audit import Audit, write_check_list, write_name_map
 from .check import default_date_range
 from .dates import parse_bound
 from .mapping import (
-    ConfigError, detect_format, extra_names, header_name, load_config_formats, load_conversions,
+    ConfigError, detect_format, extra_names, header_name, is_skipped, load_config_formats,
+    load_conversions, load_skip_sheets, skip_keys,
 )
 from .merge import convert_rows, mark_duplicates, sort_records
 from .reader import (
@@ -91,6 +92,7 @@ def run(args):
         formats, output_columns = load_config_formats(args.config)
         extras = extra_names(output_columns)
         conversions = load_conversions(args.config)
+        skip_names = load_skip_sheets(args.config)
     except ConfigError as error:
         print("설정 오류: %s" % error, file=sys.stderr)
         return 2
@@ -105,6 +107,9 @@ def run(args):
     registered = {name for fmt in formats.values() for name in fmt.source_names()}
     log = SafeLog(registered, show_names=args.show_names)
     audit = Audit(log)
+    skip = skip_keys(skip_names)
+    if skip is not None:
+        audit.excluded_sheets = 0
 
     files = list_inputs(args.input)
     for path in files:
@@ -140,7 +145,11 @@ def run(args):
             log.log("숨긴 시트 건너뜀", file=name, count=hidden)
 
         matched = False
+        excluded_here = 0
         for sheet in sheets:
+            if is_skipped(skip, sheet.name):  # 목차·요약 시트(FR-028): 읽지 않고 세기만 한다
+                excluded_here += 1
+                continue
             fmt, reason = detect_format(formats, sheet.grid, sheet.name)
             if fmt is None:
                 unmatched_sheets += 1
@@ -166,9 +175,12 @@ def run(args):
                         (name, sheet.name, record["원본 행"], log.column_label(source, position)))
             records.extend(rows)
 
+        if excluded_here:
+            audit.excluded_sheets += excluded_here
+            log.log("제외한 시트", file=name, count=excluded_here)
         if matched:
             audit.files_read += 1
-        else:
+        elif excluded_here < len(sheets):
             audit.failed_files.append(name)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

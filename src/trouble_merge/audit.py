@@ -25,6 +25,7 @@ class Audit:
         self.formula_missing = 0
         self.prefixed = 0
         self.reason_counts = {}      # 확인 필요 이유 -> 건수(한 행에 이유가 여럿이면 각각 센다, T060)
+        self.excluded_sheets = None  # skip_sheets.csv로 뺀 시트 수(FR-028). 파일이 없으면 None(줄을 내지 않음)
 
     def count_reasons(self, records):
         counts = {}
@@ -70,6 +71,8 @@ class Audit:
         for file, count in self.hidden:
             if count:
                 lines.append("숨긴 시트: %s %d개" % (log.file_label(file), count))
+        if self.excluded_sheets is not None:
+            lines.append("제외한 시트 수: %d" % self.excluded_sheets)
         lines.append("수식 값 없음 건수: %d" % self.formula_missing)
         lines.append("수식 방지 접두사 처리 건수: %d" % self.prefixed)
         return "\n".join(lines) + "\n"

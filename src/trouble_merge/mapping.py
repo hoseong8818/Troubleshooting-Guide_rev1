@@ -94,6 +94,33 @@ def load_output_columns(config_dir):
     return [(name, role) for _, _, name, role in entries]
 
 
+SKIP_SHEETS_FILE = "skip_sheets.csv"
+
+
+def load_skip_sheets(config_dir):
+    """skip_sheets.csv(FR-028)의 시트 이름 목록(적힌 그대로, 앞뒤 공백만 뺌). 파일이 없으면 None."""
+    path = Path(config_dir) / SKIP_SHEETS_FILE
+    if not path.exists():
+        return None
+    names = []
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        next(reader, None)
+        for row in reader:
+            if row and row[0].strip() and row[0].strip() not in names:
+                names.append(row[0].strip())
+    return names
+
+
+def skip_keys(names):
+    """시트 이름 비교용 키 집합(앞뒤 공백·대소문자 정리). names가 None이면 None."""
+    return None if names is None else {norm_key(n) for n in names}
+
+
+def is_skipped(keys, sheet_name):
+    return keys is not None and norm_key(sheet_name) in keys
+
+
 def extra_names(output_columns):
     return tuple(name for name, role in (output_columns or ()) if role == EXTRA_ROLE)
 

@@ -17,7 +17,9 @@ from openpyxl import load_workbook
 
 from .audit import write_name_map
 from .cli import DEFAULT_MAX_FILE_MB, DEFAULT_MAX_UNZIPPED_MB
-from .mapping import ConfigError, detect_format, header_name, load_config_formats
+from .mapping import (
+    ConfigError, detect_format, header_name, is_skipped, load_config_formats, load_skip_sheets, skip_keys,
+)
 from .reader import check_size_limits, is_readable_extension, list_inputs
 from .safe_log import SafeLog
 from .writer import unique_path
@@ -103,6 +105,7 @@ class Group:
         self.order = order          # 처음 나온 순서
         self.fmt = fmt              # 맞은 기존 양식(없으면 None)
         self.header_row = header_row
+        self.first_path = None      # 설정 화면의 예시 값용: 이 양식이 처음 나온 파일 경로
         self.files = []
         self.sheets = []            # (파일명, 시트명)
 
@@ -141,19 +144,23 @@ class Collected:
         self.files_read = 0
         self.hidden = 0
         self.headerless = 0
+        self.excluded = None  # skip_sheets.csv로 뺀 시트 수(FR-028). 파일이 없으면 None
         self.groups = []    # 시트 수가 많은 순, 같으면 먼저 나온 순
 
 
-def collect(files, formats, max_file_mb, max_unzipped_mb, log=None):
-    """파일들의 보이는 시트 헤더 행만 읽어 양식별로 묶는다(FR-025). 설정 창(FR-027)도 같이 쓴다.
+def collect(files, formats, max_file_mb, max_unzipped_mb, log=None, skip=None, keep_grid=False):
+    """파일들의 보이는 시트 헤더 행만 읽어 양식별로 묶는다(FR-025). 설정 화면(FR-027, FR-029)도 같이 쓴다.
 
-    log가 있으면 건너뛴 파일을 SafeLog로 남긴다. 셀 값은 읽지 않는다.
+    log가 있으면 건너뛴 파일을 SafeLog로 남긴다. skip은 제외할 시트 이름 키 집합(FR-028).
+    셀 값은 읽지 않는다. keep_grid는 설정 화면의 예시 값을 위해 각 양식 첫 시트의 경로만 기억한다.
     """
     def note(kind, name):
         if log is not None:
             log.log(kind, file=name)
 
     found = Collected()
+    if skip is not None:
+        found.excluded = 0
     top_rows = max([fmt.header_row for fmt in formats.values()] + [1])
     groups = {}
     for path in files:
@@ -177,6 +184,9 @@ def collect(files, formats, max_file_mb, max_unzipped_mb, log=None):
         found.hidden += hidden
 
         for sheet_name, grid in sheets:
+            if is_skipped(skip, sheet_name):
+                found.excluded += 1
+                continue
             fmt, reason = detect_format(formats, grid, sheet_name)
             header_row = fmt.header_row if fmt is not None else 1
             header = grid[header_row - 1] if len(grid) >= header_row else []
@@ -190,6 +200,8 @@ def collect(files, formats, max_file_mb, max_unzipped_mb, log=None):
             group = groups.get(key)
             if group is None:
                 group = groups[key] = Group(names, relation, cells, len(groups), fmt, header_row)
+                if keep_grid:
+                    group.first_path = path
             group.add(name, sheet_name)
 
     found.groups = sorted(groups.values(), key=lambda g: (-len(g.sheets), g.order))
@@ -199,6 +211,7 @@ def collect(files, formats, max_file_mb, max_unzipped_mb, log=None):
 def run(args):
     try:
         formats, _ = load_config_formats(args.config)
+        skip = skip_keys(load_skip_sheets(args.config))
     except ConfigError as error:
         print("설정 오류: %s" % error, file=sys.stderr)
         return 2
@@ -210,10 +223,13 @@ def run(args):
     for path in files:
         log.file_label(Path(path).name)  # 입력 순서대로 file_01, file_02 ... 번호를 정한다
 
-    found = collect(files, formats, args.max_file_mb, args.max_unzipped_mb, log)
+    found = collect(files, formats, args.max_file_mb, args.max_unzipped_mb, log, skip)
     skipped, files_read, ordered = found.skipped, found.files_read, found.groups
     lines = render(log, formats, ordered, len(files), files_read, skipped, found.hidden,
                    found.headerless, args.max_sheet_list)
+    if found.excluded is not None:
+        lines.insert(lines.index("헤더 없는 시트 수: %d" % found.headerless) + 1,
+                     "제외한 시트 수: %d" % found.excluded)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     Path(args.out).mkdir(parents=True, exist_ok=True)
