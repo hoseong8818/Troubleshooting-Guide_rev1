@@ -96,11 +96,13 @@ def read_headers(path, rows):
 
 
 class Group:
-    def __init__(self, names, relation, columns, order):
+    def __init__(self, names, relation, cells, order, fmt, header_row):
         self.names = names          # 빈 칸을 뺀 헤더 이름의 집합
         self.relation = relation    # 보고서의 '설정' 값
-        self.columns = columns      # 첫 시트 기준의 컬럼 표시(SafeLog.column_label)
+        self.cells = cells          # 첫 시트 기준의 (열 위치, 헤더 이름). 화면·설정용이며 보고서에는 위치 규칙으로 낸다
         self.order = order          # 처음 나온 순서
+        self.fmt = fmt              # 맞은 기존 양식(없으면 None)
+        self.header_row = header_row
         self.files = []
         self.sheets = []            # (파일명, 시트명)
 
@@ -133,6 +135,67 @@ def nearest_format(group, formats):
     return None if best is None else (best[0], best[2])
 
 
+class Collected:
+    def __init__(self):
+        self.skipped = []   # (파일명, 사유 문구)
+        self.files_read = 0
+        self.hidden = 0
+        self.headerless = 0
+        self.groups = []    # 시트 수가 많은 순, 같으면 먼저 나온 순
+
+
+def collect(files, formats, max_file_mb, max_unzipped_mb, log=None):
+    """파일들의 보이는 시트 헤더 행만 읽어 양식별로 묶는다(FR-025). 설정 창(FR-027)도 같이 쓴다.
+
+    log가 있으면 건너뛴 파일을 SafeLog로 남긴다. 셀 값은 읽지 않는다.
+    """
+    def note(kind, name):
+        if log is not None:
+            log.log(kind, file=name)
+
+    found = Collected()
+    top_rows = max([fmt.header_row for fmt in formats.values()] + [1])
+    groups = {}
+    for path in files:
+        name = Path(path).name
+        if not is_readable_extension(path):
+            found.skipped.append((name, "지원하지 않는 형식"))
+            note("건너뜀(지원하지 않는 형식)", name)
+            continue
+        kind = check_size_limits(path, max_file_mb, max_unzipped_mb)
+        if kind is not None:
+            found.skipped.append((name, "상한 초과(%s)" % kind))
+            note("상한 초과(%s)" % kind, name)
+            continue
+        try:
+            sheets, hidden = read_headers(path, top_rows)
+        except Exception:  # 예외 종류·메시지 모두 버린다(내부 이름이나 셀 값이 섞일 수 있다)
+            found.skipped.append((name, "열기 실패"))
+            note("열기 실패", name)
+            continue
+        found.files_read += 1
+        found.hidden += hidden
+
+        for sheet_name, grid in sheets:
+            fmt, reason = detect_format(formats, grid, sheet_name)
+            header_row = fmt.header_row if fmt is not None else 1
+            header = grid[header_row - 1] if len(grid) >= header_row else []
+            cells = [(pos, header_name(v)) for pos, v in enumerate(header) if header_name(v)]
+            if not cells:
+                found.headerless += 1
+                continue
+            relation = "기존 양식 %s" % fmt.name if fmt is not None else RELATION_TEXT[reason]
+            names = frozenset(n for _, n in cells)
+            key = (names, relation)
+            group = groups.get(key)
+            if group is None:
+                group = groups[key] = Group(names, relation, cells, len(groups), fmt, header_row)
+            group.add(name, sheet_name)
+
+    found.groups = sorted(groups.values(), key=lambda g: (-len(g.sheets), g.order))
+    return found
+
+
 def run(args):
     try:
         formats, _ = load_config_formats(args.config)
@@ -142,58 +205,15 @@ def run(args):
 
     registered = {name for fmt in formats.values() for name in fmt.source_names()}
     log = SafeLog(registered, show_names=args.show_names)
-    top_rows = max([fmt.header_row for fmt in formats.values()] + [1])
 
     files = list_inputs(args.input)
     for path in files:
         log.file_label(Path(path).name)  # 입력 순서대로 file_01, file_02 ... 번호를 정한다
 
-    skipped = []  # (파일명, 사유 문구)
-    files_read = 0
-    hidden_total = 0
-    headerless = 0
-    groups = {}
-
-    for path in files:
-        name = Path(path).name
-        if not is_readable_extension(path):
-            skipped.append((name, "지원하지 않는 형식"))
-            log.log("건너뜀(지원하지 않는 형식)", file=name)
-            continue
-        kind = check_size_limits(path, args.max_file_mb, args.max_unzipped_mb)
-        if kind is not None:
-            skipped.append((name, "상한 초과(%s)" % kind))
-            log.log("상한 초과(%s)" % kind, file=name)
-            continue
-        try:
-            sheets, hidden = read_headers(path, top_rows)
-        except Exception:  # 예외 종류·메시지 모두 버린다(내부 이름이나 셀 값이 섞일 수 있다)
-            skipped.append((name, "열기 실패"))
-            log.log("열기 실패", file=name)
-            continue
-        files_read += 1
-        hidden_total += hidden
-
-        for sheet_name, grid in sheets:
-            fmt, reason = detect_format(formats, grid, sheet_name)
-            header_row = fmt.header_row if fmt is not None else 1
-            header = grid[header_row - 1] if len(grid) >= header_row else []
-            cells = [(pos, header_name(v)) for pos, v in enumerate(header) if header_name(v)]
-            if not cells:
-                headerless += 1
-                continue
-            relation = "기존 양식 %s" % fmt.name if fmt is not None else RELATION_TEXT[reason]
-            names = frozenset(n for _, n in cells)
-            key = (names, relation)
-            group = groups.get(key)
-            if group is None:
-                columns = [log.column_label(n, pos) for pos, n in cells]
-                group = groups[key] = Group(names, relation, columns, len(groups))
-            group.add(name, sheet_name)
-
-    ordered = sorted(groups.values(), key=lambda g: (-len(g.sheets), g.order))
-    lines = render(log, formats, ordered, len(files), files_read, skipped, hidden_total, headerless,
-                   args.max_sheet_list)
+    found = collect(files, formats, args.max_file_mb, args.max_unzipped_mb, log)
+    skipped, files_read, ordered = found.skipped, found.files_read, found.groups
+    lines = render(log, formats, ordered, len(files), files_read, skipped, found.hidden,
+                   found.headerless, args.max_sheet_list)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     Path(args.out).mkdir(parents=True, exist_ok=True)
@@ -233,8 +253,8 @@ def render(log, formats, groups, total, files_read, skipped, hidden, headerless,
             "설정: %s" % group.relation,
             "파일 수: %d" % len(group.files),
             "시트 수: %d" % len(group.sheets),
-            "컬럼 수: %d" % len(group.columns),
-            "컬럼: %s" % ", ".join(group.columns),
+            "컬럼 수: %d" % len(group.cells),
+            "컬럼: %s" % ", ".join(log.column_label(n, pos) for pos, n in group.cells),
             "시트: %s" % sheet_list(
                 ["%s %s" % (log.file_label(f), log.sheet_label(s)) for f, s in group.sheets], max_list),
         ]
