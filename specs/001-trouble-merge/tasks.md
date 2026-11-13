@@ -146,8 +146,8 @@
 - [x] T069 [US5] `vercel.json`: 정적 사이트(framework·buildCommand·installCommand는 null, outputDirectory는 public, cleanUrls), 모든 경로에 CSP(외부 연결·외부 스크립트·폼 전송 차단)·nosniff·no-referrer·noindex·Cache-Control 헤더. 게시판이 이 CSP에서 깨지지 않는지 확인
 - [x] T070 [US5] `tools/run_demo.ps1`에 `-NoOpen`(브라우저도 서버도 띄우지 않음), `tools/build_site.ps1`: 예시 데이터(data\sample)로 통합한 가장 최근 `out\run_*\sample\board.html`을 `public\index.html`로 복사. 복사 전에 외부 주소·`fetch(`·XMLHttpRequest·WebSocket·`<script src`·`<link`가 있으면 실패. 실제 데이터 경로 없음(헌법 원칙 1)
 - [x] T071 [US5] `public/index.html` 생성·커밋, README에 'GitHub + Vercel 배포' 절 추가
-- [ ] T072 [사람] 비공개 GitHub 저장소 만들기, `git remote add`와 `git push`, Vercel에서 Import Project(Framework Preset Other, Build Command 비움, Output Directory public), 시연 링크를 비공개로 하려면 Deployment Protection 켜기
-- [ ] T073 [사람] 배포 뒤 확인: 검색·글 보기·오류 현황 동작, 응답 헤더에 CSP와 `X-Robots-Tag`가 있는지, 실제 데이터로 만든 board.html이 저장소·public에 없는지
+- [x] T072 [사람] 비공개 GitHub 저장소 만들기, `git remote add`와 `git push`, Vercel에서 Import Project(Framework Preset Other, Build Command 비움, Output Directory public), 시연 링크를 비공개로 하려면 Deployment Protection 켜기
+- [x] T073 [사람] 배포 뒤 확인: 검색·글 보기·오류 현황 동작, 응답 헤더에 CSP와 `X-Robots-Tag`가 있는지, 실제 데이터로 만든 board.html이 저장소·public에 없는지
 
 ## Phase 12: 스토리 4 보강 (P2) 헤더 조사 보고서(창 없음)
 
