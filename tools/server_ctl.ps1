@@ -9,16 +9,17 @@ param(
 )
 $ErrorActionPreference = "SilentlyContinue"
 
+# 함수가 돌려준 배열은 원소가 하나면 풀려서 .Count가 비므로, 부르는 쪽에서 항상 @(...)로 다시 감싼다.
 function Listening {
-  return @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+  Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 }
 
 if ($Action -eq "running") {
-  if ((Listening).Count -gt 0) { exit 0 } else { exit 1 }
+  if (@(Listening).Count -gt 0) { exit 0 } else { exit 1 }
 }
 
 if ($Action -eq "stop") {
-  $conns = Listening
+  $conns = @(Listening)
   if ($conns.Count -eq 0) { Write-Host "켜져 있는 서버가 없습니다."; exit 0 }
   foreach ($c in $conns) {
     $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
@@ -36,7 +37,7 @@ if ($Action -eq "stop") {
 if ($Action -eq "wait") {
   $deadline = (Get-Date).AddSeconds($Seconds)
   while ((Get-Date) -lt $deadline) {
-    if ((Listening).Count -gt 0) { exit 0 }
+    if (@(Listening).Count -gt 0) { exit 0 }
     Start-Sleep -Milliseconds 500
   }
   exit 1

@@ -10,6 +10,7 @@
 
 import argparse
 import json
+import socket
 import sys
 import threading
 import warnings
@@ -33,6 +34,17 @@ GUIDE = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>게
 a{color:#0a58ca}</style></head><body><h1>아직 통합 결과가 없습니다</h1>
 <p><a href="/setup">설정 화면</a>에서 저장한 뒤 <b>통합하고 게시판 보기</b>를 누르거나,
 <b>3_서버실행.bat</b>을 실행하세요.</p></body></html>"""
+
+
+class LocalServer(ThreadingHTTPServer):
+    """포트를 혼자 쓴다. 기본값(주소 재사용)이면 Windows에서 같은 포트에 서버가 겹쳐 뜰 수 있다."""
+    allow_reuse_address = False
+    allow_reuse_port = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 class App:
@@ -221,7 +233,7 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     app = App(args.input, args.config, args.out)
     try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(app, args.port))
+        httpd = LocalServer(("127.0.0.1", args.port), make_handler(app, args.port))
     except OSError:
         print("서버를 열 수 없음: 포트를 이미 쓰고 있다", file=sys.stderr)
         return 2
