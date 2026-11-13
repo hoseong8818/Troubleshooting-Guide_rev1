@@ -17,7 +17,7 @@ from openpyxl import load_workbook
 
 from .audit import write_name_map
 from .cli import DEFAULT_MAX_FILE_MB, DEFAULT_MAX_UNZIPPED_MB
-from .mapping import ConfigError, detect_format, header_name, load_formats
+from .mapping import ConfigError, detect_format, header_name, load_config_formats
 from .reader import check_size_limits, is_readable_extension, list_inputs
 from .safe_log import SafeLog
 from .writer import unique_path
@@ -135,7 +135,7 @@ def nearest_format(group, formats):
 
 def run(args):
     try:
-        formats = load_formats(args.config)
+        formats, _ = load_config_formats(args.config)
     except ConfigError as error:
         print("설정 오류: %s" % error, file=sys.stderr)
         return 2

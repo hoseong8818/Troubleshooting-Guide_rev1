@@ -12,7 +12,9 @@ from pathlib import Path
 from .audit import Audit, write_check_list, write_name_map
 from .check import default_date_range
 from .dates import parse_bound
-from .mapping import ConfigError, detect_format, header_name, load_conversions, load_formats
+from .mapping import (
+    ConfigError, detect_format, extra_names, header_name, load_config_formats, load_conversions,
+)
 from .merge import convert_rows, mark_duplicates, sort_records
 from .reader import (
     check_size_limits, exceeds_row_limit, is_readable_extension, list_inputs, read_workbook,
@@ -86,7 +88,8 @@ def skip_over_limit(audit, log, name, kind):
 
 def run(args):
     try:
-        formats = load_formats(args.config)
+        formats, output_columns = load_config_formats(args.config)
+        extras = extra_names(output_columns)
         conversions = load_conversions(args.config)
     except ConfigError as error:
         print("설정 오류: %s" % error, file=sys.stderr)
@@ -153,7 +156,7 @@ def run(args):
                 if column and fmt.standard_of(column) is None:
                     audit.add_unregistered(name, sheet.name, log.column_label(column, position))
 
-            rows = convert_rows(name, sheet, fmt, conversions, args.date_range)
+            rows = convert_rows(name, sheet, fmt, conversions, args.date_range, extras)
             audit.input_rows += len(rows)
             for record in rows:
                 for standard in record.pop("_blank"):
@@ -181,7 +184,7 @@ def run(args):
     mark_duplicates(records)
     records = sort_records(records)
 
-    _, audit.prefixed = write_workbook(records, args.out, stamp)
+    _, audit.prefixed = write_workbook(records, args.out, stamp, output_columns)
     audit.output_rows = len(records)
     audit.check_count = sum(1 for r in records if r["확인 필요 이유"] is not None)
     audit.duplicate_count = sum(1 for r in records if r["중복 의심"] is not None)

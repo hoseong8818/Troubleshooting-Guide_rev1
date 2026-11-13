@@ -12,8 +12,11 @@ DUPLICATE_MARK = "중복 의심"
 REQUIRED_STANDARD = ("설비", "증상", "원인", "조치")  # FR-013
 
 
-def convert_rows(file_name, sheet, fmt, conversions, date_range=None):
-    """한 시트의 입력 행을 출력 행(사전) 목록으로 바꾼다. 모든 칸이 빈 행은 뺀다(FR-014)."""
+def convert_rows(file_name, sheet, fmt, conversions, date_range=None, extras=()):
+    """한 시트의 입력 행을 출력 행(사전) 목록으로 바꾼다. 모든 칸이 빈 행은 뺀다(FR-014).
+
+    extras: 추가 컬럼 이름(FR-026). 대응된 원본 값을 정리해 그 이름의 칸에 넣는다(판정 없음).
+    """
     grid = sheet.grid
     header = [header_name(v) for v in grid[fmt.header_row - 1]]
 
@@ -44,6 +47,8 @@ def convert_rows(file_name, sheet, fmt, conversions, date_range=None):
                 parts.append("%s: %s" % (name, value))
 
         record = dict(final)
+        for name in extras:
+            record[name] = text(cell(name))
         record.update({
             # 감사 결과용(통합 시트에는 쓰지 않는다): 필수값이 빈 표준 컬럼
             "_blank": [c for c in REQUIRED_STANDARD

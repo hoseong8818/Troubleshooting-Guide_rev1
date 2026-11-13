@@ -46,7 +46,65 @@ class Format:
         return None
 
 
-def load_formats(config_dir):
+FIXED_COLUMNS = ("기타 항목", "확인 필요 이유", "원래 값", "중복 의심", "원본 파일", "원본 시트", "원본 행")
+EXTRA_ROLE = "추가"
+OUTPUT_COLUMNS_FILE = "output_columns.csv"
+ROLE_SHEET = "컬럼 역할"
+
+
+def load_output_columns(config_dir):
+    """output_columns.csv(FR-026)를 [(표시 이름, 역할)]로 순서대로 읽는다. 파일이 없으면 None.
+
+    역할은 판정 컬럼(STANDARD_COLUMNS) 또는 '추가'. 판정 컬럼은 정확히 한 번씩 있어야 한다.
+    표시 이름은 비어 있지 않고 서로 다르며 고정 컬럼과 겹치지 않는다. 추가 컬럼의 이름은
+    판정 컬럼 이름과도 겹치지 않는다(column_map.csv의 '표준 컬럼' 칸에서 구분할 수 없으므로).
+    """
+    path = Path(config_dir) / OUTPUT_COLUMNS_FILE
+    if not path.exists():
+        return None
+    entries = []
+    try:
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                if not row or not any(c.strip() for c in row):
+                    continue
+                row = [c.strip() for c in row] + [""] * 3
+                order, name, role = row[:3]
+                line = reader.line_num
+                if not name:
+                    raise ConfigError("%s %d줄: 표시 이름이 비어 있음" % (OUTPUT_COLUMNS_FILE, line))
+                if role not in STANDARD_COLUMNS and role != EXTRA_ROLE:
+                    raise ConfigError("%s %d줄: 역할이 아님" % (OUTPUT_COLUMNS_FILE, line))
+                if name in FIXED_COLUMNS:
+                    raise ConfigError("%s %d줄: 고정 컬럼과 같은 표시 이름" % (OUTPUT_COLUMNS_FILE, line))
+                if role == EXTRA_ROLE and name in STANDARD_COLUMNS:
+                    raise ConfigError("%s %d줄: 추가 컬럼 이름이 판정 컬럼과 같음" % (OUTPUT_COLUMNS_FILE, line))
+                entries.append((int(order), line, name, role))
+    except ValueError:
+        raise ConfigError("%s 형식 오류(순서는 정수)" % OUTPUT_COLUMNS_FILE)
+    names = [name for _, _, name, _ in entries]
+    if len(names) != len(set(names)):
+        raise ConfigError("%s: 표시 이름 중복" % OUTPUT_COLUMNS_FILE)
+    roles = [role for _, _, _, role in entries if role != EXTRA_ROLE]
+    if sorted(roles) != sorted(STANDARD_COLUMNS):
+        raise ConfigError("%s: 판정 컬럼 6개가 한 번씩 있어야 함" % OUTPUT_COLUMNS_FILE)
+    entries.sort(key=lambda e: (e[0], e[1]))
+    return [(name, role) for _, _, name, role in entries]
+
+
+def extra_names(output_columns):
+    return tuple(name for name, role in (output_columns or ()) if role == EXTRA_ROLE)
+
+
+def load_config_formats(config_dir):
+    """(양식 사전, output_columns 또는 None). 추가 컬럼 이름을 대응 표의 표준 컬럼으로 허용한다."""
+    output_columns = load_output_columns(config_dir)
+    return load_formats(config_dir, extra_names(output_columns)), output_columns
+
+
+def load_formats(config_dir, extras=()):
     path = Path(config_dir) / "column_map.csv"
     formats = {}
     try:
@@ -58,7 +116,7 @@ def load_formats(config_dir):
                     continue
                 row = [c.strip() for c in row] + [""] * 5
                 name, source, standard, header_row, sheet = row[:5]
-                if standard not in STANDARD_COLUMNS:
+                if standard not in STANDARD_COLUMNS and standard not in extras:
                     raise ConfigError("column_map.csv %d줄: 표준 컬럼이 아님" % reader.line_num)
                 fmt = formats.setdefault(name, Format(name))
                 fmt.columns.append((source, standard))

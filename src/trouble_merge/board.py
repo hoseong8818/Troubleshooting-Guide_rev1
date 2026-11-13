@@ -17,19 +17,28 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+from .mapping import ROLE_SHEET, STANDARD_COLUMNS
 from .writer import unique_path
 
 TEMPLATE = Path(__file__).with_name("board_page.html")
 
 
 def read_posts(path):
-    """통합 엑셀의 첫 시트를 게시글 목록(헤더 이름 -> 값)으로 읽는다. 빈 문자열은 None."""
+    """통합 엑셀의 첫 시트를 게시글 목록(헤더 이름 -> 값)으로 읽는다. 빈 문자열은 None.
+
+    '컬럼 역할' 시트가 있으면 판정 컬럼의 표시 이름을 역할 이름으로 바꿔 지금과 같은 화면을 만든다.
+    """
     wb = load_workbook(path, data_only=True)
     try:
         rows = list(wb.worksheets[0].iter_rows(values_only=True))
+        roles = {}
+        if ROLE_SHEET in wb.sheetnames:  # 표시 이름을 바꾼 통합 엑셀(FR-026): 역할 이름으로 되돌린다
+            for name, role in list(wb[ROLE_SHEET].iter_rows(values_only=True))[1:]:
+                if role in STANDARD_COLUMNS:
+                    roles[name] = role
     finally:
         wb.close()
-    header = list(rows[0])
+    header = [roles.get(name, name) for name in rows[0]]
     return [
         dict(zip(header, [None if v == "" else v for v in row]))
         for row in rows[1:] if any(v is not None for v in row)
