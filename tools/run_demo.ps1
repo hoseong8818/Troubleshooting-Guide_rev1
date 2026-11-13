@@ -6,7 +6,7 @@
 # - 예시 데이터(data\sample, 전부 가상)가 없으면 tools\make_sample_data.py로 만든다(고정 시드라 항상 같은 결과).
 # - 예시 데이터용 설정(양식 4종, 설비·분류 목록, 원인 미상 단어)은 out\sample_cfg에 만든다. 저장소의 config\는 건드리지 않는다.
 # - 결과는 매번 새 폴더 out\run_<시각>에 만든다. 이전 결과를 덮어쓰지 않는다.
-# - 실제 데이터에는 이 스크립트를 쓰지 않는다. 실제 데이터는 run_merge.bat을 사람이 직접 실행한다.
+# - 실제 데이터에는 이 스크립트를 쓰지 않는다. 실제 데이터는 1_검사.bat ~ 4_서버종료.bat의 맨 위 네 줄을 고쳐 사람이 직접 실행한다.
 # - -Serve를 붙이면 파일로 여는 대신 http://localhost:3456 으로 띄운다(tools\serve_board.ps1).
 # - -NoOpen을 붙이면 브라우저도 서버도 띄우지 않고 결과만 만든다(tools\build_site.ps1이 쓴다).
 # - -Sample <폴더>로 예시 데이터 위치를 바꿀 수 있다(기본 data\sample).
