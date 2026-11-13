@@ -42,7 +42,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_demo.ps1 -Serve
 
 `run_merge.bat` 맨 위 세 줄(입력, 설정, 출력 폴더)만 고친 뒤 더블클릭합니다. 통합 → 게시판 생성 → 게시판 열기까지 합니다. 실제 데이터 폴더는 저장소 밖에 두고, 실행은 사람이 합니다(아래 '실제 데이터를 다룰 때의 규칙').
 
-양식이 몇 종인지 먼저 보려면 `run_survey.bat`(같은 세 줄)을 더블클릭하거나 `python -m trouble_merge.survey --input <폴더> --config <폴더> --out <폴더>`를 실행합니다. 헤더 행만 읽어 양식별 파일 수, 기존 양식 이름 또는 '새 양식', 가장 가까운 양식과의 컬럼 차이를 `survey_<시각>.txt`로 냅니다(셀 값 없음, 미등록 컬럼은 위치로, 파일·시트명은 마스킹. 헤더 병합 칸은 채우지 않음).
+양식이 몇 종인지 먼저 보려면 `run_survey.bat`(같은 세 줄)을 더블클릭하거나 `python -m trouble_merge.survey --input <폴더> --config <폴더> --out <폴더>`를 실행합니다. 헤더 행만 읽어 양식별 파일 수, 기존 양식 이름 또는 '새 양식', 가장 가까운 양식과의 컬럼 차이를 `survey_<시각>.txt`로 냅니다. 양식마다 시트는 앞 10개만 적고 나머지는 `외 N개`로 줄이며, `--max-sheet-list 0`이면 전부 적습니다(셀 값 없음, 미등록 컬럼은 위치로, 파일·시트명은 마스킹. 헤더 병합 칸은 채우지 않음).
 
 ## 명령줄 실행
 

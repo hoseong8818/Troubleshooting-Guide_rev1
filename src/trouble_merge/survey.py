@@ -40,7 +40,29 @@ def build_parser():
                         help="압축 해제 후 크기 상한(MB). 넘는 파일은 건너뛴다")
     parser.add_argument("--show-names", action="store_true",
                         help="보고서·로그에 실제 파일명·시트명을 낸다(기본은 마스킹)")
+    parser.add_argument("--max-sheet-list", type=sheet_list_count, default=DEFAULT_MAX_SHEET_LIST,
+                        help="양식마다 '시트:' 줄에 낼 시트 수. 넘으면 ' 외 N개'. 0이면 전부")
     return parser
+
+
+DEFAULT_MAX_SHEET_LIST = 10
+
+
+def sheet_list_count(text):
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("0 이상의 정수여야 한다")
+    if value < 0:
+        raise argparse.ArgumentTypeError("0 이상의 정수여야 한다")
+    return value
+
+
+def sheet_list(labels, limit):
+    """앞 limit개만 쉼표로 잇고, 넘으면 ' 외 N개'를 붙인다. limit이 0이면 전부."""
+    if limit == 0 or len(labels) <= limit:
+        return ", ".join(labels)
+    return "%s 외 %d개" % (", ".join(labels[:limit]), len(labels) - limit)
 
 
 def main(argv=None):
@@ -170,7 +192,8 @@ def run(args):
             group.add(name, sheet_name)
 
     ordered = sorted(groups.values(), key=lambda g: (-len(g.sheets), g.order))
-    lines = render(log, formats, ordered, len(files), files_read, skipped, hidden_total, headerless)
+    lines = render(log, formats, ordered, len(files), files_read, skipped, hidden_total, headerless,
+                   args.max_sheet_list)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     Path(args.out).mkdir(parents=True, exist_ok=True)
@@ -186,7 +209,7 @@ def run(args):
     return 1 if skipped else 0
 
 
-def render(log, formats, groups, total, files_read, skipped, hidden, headerless):
+def render(log, formats, groups, total, files_read, skipped, hidden, headerless, max_list):
     new_forms = sum(1 for g in groups if g.relation == RELATION_TEXT["none"])
     lines = [
         "헤더 조사 보고서",
@@ -212,8 +235,8 @@ def render(log, formats, groups, total, files_read, skipped, hidden, headerless)
             "시트 수: %d" % len(group.sheets),
             "컬럼 수: %d" % len(group.columns),
             "컬럼: %s" % ", ".join(group.columns),
-            "시트: %s" % ", ".join(
-                "%s %s" % (log.file_label(f), log.sheet_label(s)) for f, s in group.sheets),
+            "시트: %s" % sheet_list(
+                ["%s %s" % (log.file_label(f), log.sheet_label(s)) for f, s in group.sheets], max_list),
         ]
         near = nearest_group(group, groups)
         lines.append("가장 가까운 양식: %s" % (
