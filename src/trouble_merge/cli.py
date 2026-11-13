@@ -180,7 +180,8 @@ def run(args):
             log.log("제외한 시트", file=name, count=excluded_here)
         if matched:
             audit.files_read += 1
-        elif excluded_here < len(sheets):
+        elif not (excluded_here and excluded_here == len(sheets)):
+            # 제외 시트만 있는 파일(FR-028)이 아니면 지금처럼 읽지 못한 파일로 센다(보이는 시트 0개 포함)
             audit.failed_files.append(name)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
